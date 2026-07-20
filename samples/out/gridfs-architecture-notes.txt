@@ -1,0 +1,21 @@
+GridFS Architecture Notes
+
+GridFS is not a separate storage engine. It is a convention: a driver-level
+specification for splitting a large binary object across ordinary MongoDB
+documents in two ordinary collections.
+
+fs.files holds one metadata document per file: filename, length, chunkSize,
+uploadDate, and an application-owned metadata sub-document. fs.chunks holds
+the payload, split into fixed size binary chunks of 255 KB by default, each
+tagged with its parent files_id and its ordinal position n. A unique index on
+{ files_id: 1, n: 1 } makes any chunk of any file a single index seek.
+
+Because chunks are addressable by ordinal, a byte range translates directly
+into a chunk range. Serving HTTP Range bytes=5242880-7340031 means reading
+chunks twenty through twenty-eight and trimming the ends. Nothing streams from
+the beginning of the file, which is what makes mid-file seeking in a two hour
+video as cheap as seeking at the start.
+
+The 16 MB BSON document limit is the reason GridFS exists at all, and it is
+also the constraint on extracted text: the text pulled out of a document is
+stored inside the fs.files document, so it must be clipped well below 16 MB.
