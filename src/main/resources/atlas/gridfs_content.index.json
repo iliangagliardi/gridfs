@@ -1,0 +1,32 @@
+{
+  "name": "gridfs_content",
+  "definition": {
+    "mappings": {
+      "dynamic": false,
+      "fields": {
+        "filename": [
+          { "type": "string", "analyzer": "lucene.standard" },
+          { "type": "autocomplete", "tokenization": "edgeGram", "minGrams": 2, "maxGrams": 15 },
+          { "type": "token" }
+        ],
+        "uploadDate": { "type": "date" },
+        "length": { "type": "number" },
+        "metadata": {
+          "type": "document",
+          "dynamic": false,
+          "fields": {
+            "extractedText": { "type": "string", "analyzer": "lucene.standard" },
+            "title": [
+              { "type": "string", "analyzer": "lucene.standard" },
+              { "type": "autocomplete", "tokenization": "edgeGram", "minGrams": 2, "maxGrams": 15 }
+            ],
+            "author": { "type": "string", "analyzer": "lucene.standard" },
+            "category": { "type": "token" },
+            "tags": { "type": "token" },
+            "contentType": { "type": "token" }
+          }
+        }
+      }
+    }
+  }
+}

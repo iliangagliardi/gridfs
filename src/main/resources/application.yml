@@ -1,0 +1,67 @@
+spring:
+  application:
+    name: gridfs-demo
+
+  data:
+    mongodb:
+      # Override with MONGODB_URI to point at Atlas:
+      #   export MONGODB_URI="mongodb+srv://user:pass@cluster.mongodb.net/gridfs_demo"
+      # The mongodb-atlas-local image enforces auth (it runs a keyfile-secured
+      # replica set so mongot can tail the oplog). Connections from the host are
+      # not covered by the localhost exception, so the demo user below must
+      # exist — run.sh creates it idempotently.
+      uri: ${MONGODB_URI:mongodb://gridfs:gridfs@localhost:27018/gridfs_demo?authSource=admin&authMechanism=SCRAM-SHA-256&directConnection=true}
+      # GridFS bucket name -> collections fs.files and fs.chunks
+      gridfs:
+        bucket: fs
+
+  servlet:
+    multipart:
+      max-file-size: 512MB
+      max-request-size: 512MB
+      # Stream straight to GridFS rather than buffering large uploads in heap
+      file-size-threshold: 2MB
+
+  thymeleaf:
+    cache: false
+
+server:
+  port: ${PORT:8081}
+  compression:
+    enabled: true
+    mime-types: text/html,text/css,application/javascript,application/json
+  # Range requests for media must not be swallowed by compression
+  tomcat:
+    max-swallow-size: -1
+
+gridfs-demo:
+  # Extracted text is stored inside the fs.files document, which is subject to
+  # the 16MB BSON limit. Clip well below it and leave room for the rest.
+  max-extracted-text-bytes: 1048576   # 1 MB
+  # Name of the Atlas Search index created over fs.files
+  search-index-name: gridfs_content
+  # AUTO detects whether $search is available and falls back to regex if not.
+  # Force with ATLAS_SEARCH or REGEX_FALLBACK.
+  search-mode: AUTO
+  # Bytes served per Range request slice when the client asks for an open range
+  media-chunk-bytes: 2097152          # 2 MB
+
+  # OCR (needs the `tesseract` binary on PATH; the app degrades cleanly without it).
+  # true  = an uploaded image is OCR'd immediately, so it is searchable at once.
+  # false = images land un-OCR'd, which is how you demo the on-demand "Run OCR"
+  #         button on a freshly seeded corpus. Existing files are unaffected
+  #         either way — the button always works for anything not yet OCR'd.
+  auto-ocr-on-upload: true
+
+logging:
+  level:
+    com.mongodb.demo.gridfs: DEBUG
+    org.apache.tika: WARN
+    org.apache.pdfbox: ERROR
+    org.apache.fontbox: ERROR
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics

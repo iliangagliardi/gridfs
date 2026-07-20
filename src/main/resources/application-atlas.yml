@@ -1,0 +1,54 @@
+# Profile overrides for running the demo against MongoDB Atlas instead of the
+# local mongodb-atlas-local container.
+#
+#   export MONGODB_URI='mongodb+srv://USER:PASS@cluster0.abcde.mongodb.net/gridfs_demo?retryWrites=true&w=majority'
+#   SPRING_PROFILES_ACTIVE=atlas ./run.sh
+#
+# or with the jar:
+#   java -jar target/gridfs-demo-1.0.0.jar --spring.profiles.active=atlas
+#
+# Everything not listed here is inherited from application.yml.
+
+spring:
+  data:
+    mongodb:
+      # No default — running the atlas profile without MONGODB_URI set is a
+      # startup failure, which is what you want. It stops the app silently
+      # falling back to localhost and making you wonder why Atlas looks empty.
+      uri: ${MONGODB_URI}
+      gridfs:
+        bucket: ${GRIDFS_BUCKET:fs}
+
+  servlet:
+    multipart:
+      # Atlas ingress and any proxy in front of it are less forgiving than a
+      # local container. 256 MB is a sane ceiling for a demo over the network.
+      max-file-size: ${MAX_FILE_SIZE:256MB}
+      max-request-size: ${MAX_REQUEST_SIZE:256MB}
+
+  thymeleaf:
+    # Real deployment: cache the templates.
+    cache: true
+
+gridfs-demo:
+  # On Atlas the $search stage is always available, so do not waste a probe
+  # round trip on detection and never silently degrade to regex in front of a
+  # client. If this throws, the index genuinely is not there — go create it.
+  search-mode: ${SEARCH_MODE:ATLAS_SEARCH}
+
+  # Must match the index name you created in the Atlas UI / mongosh over the
+  # fs.files collection. See src/main/resources/atlas/gridfs_content.index.json.
+  search-index-name: ${SEARCH_INDEX_NAME:gridfs_content}
+
+  # Extracted text still lives inside the fs.files document and is still bound
+  # by the 16 MB BSON limit. Unchanged from the default.
+  max-extracted-text-bytes: ${MAX_EXTRACTED_TEXT_BYTES:1048576}
+
+  # Serving Range slices across the public internet: smaller slices give the
+  # player faster first paint after a seek than the 2 MB local default.
+  media-chunk-bytes: ${MEDIA_CHUNK_BYTES:1048576}   # 1 MB
+
+logging:
+  level:
+    com.mongodb.demo.gridfs: INFO
+    org.mongodb.driver: WARN

@@ -1,0 +1,69 @@
+# MongoDB GridFS + Atlas Search demo — full local stack.
+#
+#   docker compose up --build
+#
+# Then open http://localhost:8081
+#
+# The mongodb service uses mongodb/mongodb-atlas-local, NOT the plain `mongo`
+# image. That image bundles mongod + mongot (the search node), which is what
+# gives you a real `$search` aggregation stage on your laptop. With plain
+# `mongo` the app still runs, but it degrades to SearchMode.REGEX_FALLBACK.
+
+services:
+  mongodb:
+    image: mongodb/mongodb-atlas-local:latest
+    # Auth is enforced by this image (keyfile-secured replica set for mongot),
+    # so a root user must be seeded or host/app connections get Unauthorized.
+    environment:
+      MONGODB_INITDB_ROOT_USERNAME: gridfs
+      MONGODB_INITDB_ROOT_PASSWORD: gridfs
+    container_name: gridfs-mongo
+    # The single-node replica set advertises its own hostname in rs.conf().
+    # Pinning it to "mongodb" makes that advertised host resolvable from the
+    # app container on the compose network.
+    hostname: mongodb
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongodb-data:/data/db
+      - mongodb-config:/data/configdb
+    healthcheck:
+      # The image ships its own readiness probe. Unlike a TCP port check, this
+      # returns healthy only once mongod AND mongot (search) are both up and
+      # the local Atlas Search API is answering — which is exactly what the
+      # app needs before it can create the gridfs_content index.
+      test: ["CMD", "/usr/local/bin/runner", "healthcheck"]
+      interval: 10s
+      timeout: 60s
+      start_period: 60s
+      retries: 12
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gridfs-app
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    ports:
+      - "8081:8080"
+    environment:
+      # directConnection=true skips replica-set topology discovery. Harmless for
+      # a single-node demo deployment and removes a whole class of "cannot
+      # resolve host" failures across the container boundary.
+      MONGODB_URI: "mongodb://gridfs:gridfs@mongodb:27017/gridfs_demo?authSource=admin&authMechanism=SCRAM-SHA-256&directConnection=true"
+      SPRING_PROFILES_ACTIVE: "default"
+      JAVA_OPTS: "-XX:MaxRAMPercentage=75"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      start_period: 60s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  mongodb-data:
+  mongodb-config:
